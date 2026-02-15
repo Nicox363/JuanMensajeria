@@ -1,0 +1,8 @@
+credentials.json
+mensajeria-juan-*.json
+__pycache__/
+*.pyc
+.env
+log_envios.txt
+Calendario de pagos (1).xlsx
+Review fechas compraventa.csv
