@@ -237,7 +237,8 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
         if attachment_path and os.path.exists(attachment_path):
             try:
                 with open(attachment_path, 'rb') as f:
-                    attach = MIMEApplication(f.read(), _subtype="pdf")
+                    # Usar octet-stream para forzar la descarga en Apple Mail en lugar de preview embebido
+                    attach = MIMEApplication(f.read(), _subtype="octet-stream")
                     attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
                     msg.attach(attach)
             except Exception as e:
