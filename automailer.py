@@ -245,9 +245,16 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
             
         server.login(EMAIL_USER, EMAIL_PASSWORD)
         text = msg.as_string()
-        # Enviar a todos los destinatarios Y al CC
-        # smtplib sendmail necesita una lista con TODOS los recipientes (To + Cc)
-        all_recipients = lista_destinatarios + [EMAIL_CC]
+        
+        # Enviar a todos los destinatarios Y al CC (soporte multiples CC)
+        # EMAIL_CC puede ser "a@b.com, c@d.com" -> separar
+        lista_cc = [e.strip() for e in str(EMAIL_CC).replace(';',',').split(',') if e.strip()]
+        
+        # Actualizar header CC en el mensaje para que se vea bonito
+        if lista_cc:
+             msg.replace_header('Cc', ", ".join(lista_cc))
+
+        all_recipients = lista_destinatarios + lista_cc
         server.sendmail(EMAIL_USER, all_recipients, text)
         server.quit()
         return True
