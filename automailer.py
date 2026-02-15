@@ -176,11 +176,23 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
             print(f"  [DRY_RUN] Cuerpo (truncado): {cuerpo[:50]}...")
             return True
 
-        msg = MIMEMultipart()
+
+        msg = MIMEMultipart('mixed')
         msg['From'] = EMAIL_USER
         msg['To'] = ", ".join(lista_destinatarios)
         msg['Cc'] = EMAIL_CC
         msg['Subject'] = asunto
+
+        # Estructura:
+        # MIXED (Root)
+        #  |-- RELATED (Contenido visual)
+        #  |    |-- ALTERNATIVE (Texto)
+        #  |    |    |-- HTML
+        #  |    |-- IMAGE (Logo CID)
+        #  |-- APPLICATION (PDF Adjunto)
+
+        msg_related = MIMEMultipart('related')
+        msg.attach(msg_related)
 
         # Construir contenido HTML
         # Reemplazar saltos de línea por <br>
@@ -206,21 +218,22 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
         </html>
         """
 
-        # Adjuntar parte HTML
-        msg.attach(MIMEText(html_content, 'html'))
+        # Adjuntar parte HTML al contenedor RELATED
+        msg_related.attach(MIMEText(html_content, 'html'))
 
-        # Adjuntar Imagen (Logo) si existe
+        # Adjuntar Imagen (Logo) al contenedor RELATED
         logo_path = 'logo.jpg'
         if os.path.exists(logo_path):
             with open(logo_path, 'rb') as f:
                 img_data = f.read()
                 image = MIMEImage(img_data, name=os.path.basename(logo_path))
                 image.add_header('Content-ID', '<logo_img>')
-                msg.attach(image)
+                image.add_header('Content-Disposition', 'inline', filename=os.path.basename(logo_path)) # Inline explícito
+                msg_related.attach(image)
         else:
             print("  [!] Advertencia: No se encontró logo.jpg")
 
-        # Adjuntar PDF (Metodos de Pago) si existe
+        # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
         if attachment_path and os.path.exists(attachment_path):
             try:
                 with open(attachment_path, 'rb') as f:
