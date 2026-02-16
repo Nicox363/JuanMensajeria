@@ -9,8 +9,6 @@ import os
 import sys
 import json
 import base64
-import zipfile
-import io
 
 # Google Sheets Imports
 import gspread
@@ -238,18 +236,16 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
         # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
         if attachment_path and os.path.exists(attachment_path):
             try:
-                # COMPRIMIR EN ZIP para evitar preview en Apple Mail (100% efectivo)
-                file_name = os.path.basename(attachment_path)
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                    zf.write(attachment_path, arcname=file_name)
+                with open(attachment_path, 'rb') as f:
+                    # Volver a PDF normal, pero añadir Content-Disposition explícito
+                    attach = MIMEApplication(f.read(), _subtype="pdf")
+                    attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
+                    msg.attach(attach)
+                    
+                # TRUCO APPLE MAIL: Añadir una parte de texto vacía al final del multipart/mixed
+                # Esto suele forzar a Apple Mail a mostrar los adjuntos previos como iconos
+                msg.attach(MIMEText('', 'plain')) 
                 
-                zip_buffer.seek(0)
-                zip_filename = os.path.splitext(file_name)[0] + ".zip"
-                
-                attach = MIMEApplication(zip_buffer.read(), _subtype="zip")
-                attach.add_header('Content-Disposition', 'attachment', filename=zip_filename)
-                msg.attach(attach)
             except Exception as e:
                 print(f"  [!] Error adjuntando {attachment_path}: {e}")
         elif attachment_path:
