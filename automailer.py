@@ -29,7 +29,7 @@ SMTP_SERVER = 'mail.privodeveloper.com'
 SMTP_PORT = 465 
 EMAIL_USER = os.getenv('EMAIL_USER', 'admin@privodeveloper.com') 
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', 'Privo*20') 
-EMAIL_CC = os.getenv('EMAIL_CC', 'nmilano@privodeveloper.com')
+EMAIL_CC = os.getenv('EMAIL_CC', 'nmilano@privodeveloper.com, admin@privodeveloper.com')
 
 # LOG DE ENVÍOS
 LOG_FILE = 'log_envios.txt'
