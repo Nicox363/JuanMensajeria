@@ -13,6 +13,8 @@ import base64
 # Google Sheets Imports
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from PyPDF2 import PdfReader, PdfWriter
+import io
 
 # --- CONFIGURACIÓN ---
 # GOOGLE SHEETS ID
@@ -29,7 +31,7 @@ SMTP_SERVER = 'mail.privodeveloper.com'
 SMTP_PORT = 465 
 EMAIL_USER = os.getenv('EMAIL_USER', 'admin@privodeveloper.com') 
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD', 'Privo*20') 
-EMAIL_CC = os.getenv('EMAIL_CC', 'nmilano@privodeveloper.com, admin@privodeveloper.com')
+EMAIL_CC = os.getenv('EMAIL_CC', 'nmilano@privodeveloper.com, admin@privodeveloper.com, Jserva@gmail.com, nlamorgiabondar@gmail.com')
 
 # LOG DE ENVÍOS
 LOG_FILE = 'log_envios.txt'
@@ -234,28 +236,53 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
             print("  [!] Advertencia: No se encontró logo.jpg")
 
         # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
+        # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
         if attachment_path and os.path.exists(attachment_path):
             try:
+                # ESTRATEGIA: Añadir página en blanco para forzar vista de icono en Apple Mail
+                pdf_bytes = io.BytesIO()
+                
                 with open(attachment_path, 'rb') as f:
-                    # ESTRATEGIA COMBINADA PARA APPLE MAIL:
-                    # 1. Content-Type: application/octet-stream (Generic binary)
-                    # 2. Content-Disposition: attachment explicitly
-                    # 3. Dummy Text part at the end
+                    reader = PdfReader(f)
+                    writer = PdfWriter()
                     
-                    file_content = f.read()
-                    file_name = os.path.basename(attachment_path)
+                    # Copiar páginas originales
+                    for page in reader.pages:
+                        writer.add_page(page)
                     
-                    attach = MIMEApplication(file_content, _subtype="octet-stream")
-                    attach.add_header('Content-Disposition', 'attachment', filename=file_name)
-                    attach.add_header('Content-Description', file_name) # Extra header helps sometimes
-                    msg.attach(attach)
-                    
-                # TRUCO APPLE MAIL: Añadir una parte de texto vacía al final del multipart/mixed
-                # Esto suele forzar a Apple Mail a mostrar los adjuntos previos como iconos
+                    # Añadir página en blanco (mismo tamaño que la ultima o default)
+                    if len(reader.pages) > 0:
+                        last_page = reader.pages[-1]
+                        width = last_page.mediabox.width
+                        height = last_page.mediabox.height
+                        writer.add_blank_page(width=width, height=height)
+                    else:
+                        writer.add_blank_page()
+                        
+                    writer.write(pdf_bytes)
+                
+                pdf_bytes.seek(0)
+                file_content = pdf_bytes.read()
+                file_name = os.path.basename(attachment_path)
+                
+                # Usar application/pdf normal, ya que el multipage debería ser suficiente
+                attach = MIMEApplication(file_content, _subtype="pdf")
+                attach.add_header('Content-Disposition', 'attachment', filename=file_name)
+                msg.attach(attach)
+                
+                # Mantener truco de texto vacío por si acaso
                 msg.attach(MIMEText('', 'plain')) 
                 
             except Exception as e:
-                print(f"  [!] Error adjuntando {attachment_path}: {e}")
+                print(f"  [!] Error adjuntando/modificando PDF {attachment_path}: {e}")
+                # Fallback: adjuntar original si falla PyPDF2
+                try:
+                    with open(attachment_path, 'rb') as f:
+                        attach = MIMEApplication(f.read(), _subtype="pdf")
+                        attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
+                        msg.attach(attach)
+                except:
+                    pass
         elif attachment_path:
              # Si se especificó un adjunto pero no existe
              print(f"  [!] Advertencia: No se encontró el archivo adjunto '{attachment_path}'")
