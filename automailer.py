@@ -237,9 +237,17 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
         if attachment_path and os.path.exists(attachment_path):
             try:
                 with open(attachment_path, 'rb') as f:
-                    # Volver a PDF normal, pero añadir Content-Disposition explícito
-                    attach = MIMEApplication(f.read(), _subtype="pdf")
-                    attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
+                    # ESTRATEGIA COMBINADA PARA APPLE MAIL:
+                    # 1. Content-Type: application/octet-stream (Generic binary)
+                    # 2. Content-Disposition: attachment explicitly
+                    # 3. Dummy Text part at the end
+                    
+                    file_content = f.read()
+                    file_name = os.path.basename(attachment_path)
+                    
+                    attach = MIMEApplication(file_content, _subtype="octet-stream")
+                    attach.add_header('Content-Disposition', 'attachment', filename=file_name)
+                    attach.add_header('Content-Description', file_name) # Extra header helps sometimes
                     msg.attach(attach)
                     
                 # TRUCO APPLE MAIL: Añadir una parte de texto vacía al final del multipart/mixed
