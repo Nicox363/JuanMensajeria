@@ -9,6 +9,8 @@ import os
 import sys
 import json
 import base64
+import zipfile
+import io
 
 # Google Sheets Imports
 import gspread
@@ -236,11 +238,18 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
         # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
         if attachment_path and os.path.exists(attachment_path):
             try:
-                with open(attachment_path, 'rb') as f:
-                    # Usar octet-stream para forzar la descarga en Apple Mail en lugar de preview embebido
-                    attach = MIMEApplication(f.read(), _subtype="octet-stream")
-                    attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
-                    msg.attach(attach)
+                # COMPRIMIR EN ZIP para evitar preview en Apple Mail (100% efectivo)
+                file_name = os.path.basename(attachment_path)
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                    zf.write(attachment_path, arcname=file_name)
+                
+                zip_buffer.seek(0)
+                zip_filename = os.path.splitext(file_name)[0] + ".zip"
+                
+                attach = MIMEApplication(zip_buffer.read(), _subtype="zip")
+                attach.add_header('Content-Disposition', 'attachment', filename=zip_filename)
+                msg.attach(attach)
             except Exception as e:
                 print(f"  [!] Error adjuntando {attachment_path}: {e}")
         elif attachment_path:
