@@ -398,7 +398,10 @@ def main():
         return
 
     # 3. Validar columnas esperadas (BOT MENSAJES structure)
+    # 3. Validar columnas esperadas (BOT MENSAJES structure)
+    # Se añade 'Pagado' como opcional/esperada
     expected_cols = ['Comprador', 'Email', 'Fecha_Vencimiento', 'Monto', 'Idioma', 'Ultimo_Aviso']
+    # column 'Pagado' is checked dynamically later
     current_cols = df.columns.tolist()
     
     missing = [c for c in expected_cols if c not in current_cols]
@@ -513,16 +516,67 @@ def main():
         tipo_aviso = None
         
         # Reglas de negocio
+        # Reglas de negocio
+        
+        # 1. Chequeo de Pagado
+        pagado_val = str(row.get('Pagado', '')).lower().strip()
+        is_pagado = pagado_val in ['si', 'x', 'yes', 'ok', 'verdadero', 'true']
+        
         if dias_restantes == 7:
             tipo_aviso = 'V-7'
+            # SIEMPRE SE ENVIA (Solicitud Usuario)
         elif dias_restantes == 2:
             tipo_aviso = 'V-2'
-        elif dias_restantes == -3:
-            tipo_aviso = 'V+3'
-        elif dias_restantes == -7:
-            tipo_aviso = 'V+7'
-        elif dias_restantes == -15:
-            tipo_aviso = 'V+15'
+            # SIEMPRE SE ENVIA (Solicitud Usuario)
+        
+        # Lógica para fechas pasadas (Vencido)
+        elif dias_restantes < 0:
+            if is_pagado:
+                # AUTO-ADVANCE: Si ya pagó y la fecha venció, avanzar al próximo mes
+                try:
+                    # Calcular nueva fecha (+1 mes)
+                    nueva_fecha = fecha_venc + pd.DateOffset(months=1)
+                    nueva_fecha_str = nueva_fecha.strftime('%d/%m/%Y')
+                    
+                    if not DRY_RUN:
+                        print(f"  [AUTO-ADVANCE] {nombre} pagó. Avanzando fecha de {fecha_venc.strftime('%d/%m/%Y')} a {nueva_fecha_str}")
+                        
+                        # Actualizar Google Sheet (Fila = index + 2)
+                        # Asumimos que 'Fecha_Vencimiento' está en columna C (3) y 'Pagado' en alguna otra.
+                        # Mejor buscar indices por encabezado
+                        idx_fecha_col = headers.index(col_fecha) + 1
+                        idx_pagado_col = -1
+                        if 'Pagado' in headers:
+                             idx_pagado_col = headers.index('Pagado') + 1
+                        
+                        sheet_row = index + 2
+                        
+                        # Actualizar Fecha
+                        worksheet.update_cell(sheet_row, idx_fecha_col, nueva_fecha_str)
+                        
+                        # Limpiar Pagado
+                        if idx_pagado_col != -1:
+                            worksheet.update_cell(sheet_row, idx_pagado_col, "")
+                            
+                        registrar_log(f"AUTO-ADVANCE: {nombre} - Fecha actualizada a {nueva_fecha_str}")
+                    else:
+                        print(f"  [DRY_RUN] [AUTO-ADVANCE] Se avanzaría fecha a {nueva_fecha_str} y limpiaría 'Pagado'")
+                        
+                except Exception as e:
+                    print(f"  [!] Error en Auto-Advance para {nombre}: {e}")
+                
+                # No enviar correo de atraso si ya pagó
+                tipo_aviso = None 
+                
+            else:
+                # NO ha pagado y está vencido -> Reclamos
+                if dias_restantes == -3:
+                    tipo_aviso = 'V+3'
+                elif dias_restantes == -7:
+                    tipo_aviso = 'V+7'
+                elif dias_restantes == -15:
+                    tipo_aviso = 'V+15'
+
         
         # Omitir validación de 'Ultimo_Aviso' por simplicidad (según código previo)
         
