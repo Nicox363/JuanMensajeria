@@ -334,12 +334,12 @@ def main():
         
         sheet = client.open_by_key(SHEET_ID)
         
-        # ! IMPORTANTE: Usar la pestaña "Review fechas compraventa"
+        # ! IMPORTANTE: Usar la pestaña "BOT MENSAJES"
         try:
-            worksheet = sheet.worksheet('Review fechas compraventa')
+            worksheet = sheet.worksheet('BOT MENSAJES')
         except:
-            print("[!] No se encontró la pestaña 'Review fechas compraventa', intentando índice 1")
-            worksheet = sheet.get_worksheet(1)
+            print("[!] No se encontró la pestaña 'BOT MENSAJES', intentando índice 0")
+            worksheet = sheet.get_worksheet(0)
         
         print(f"Accediendo a pestaña: {worksheet.title}")
         
@@ -362,83 +362,38 @@ def main():
         print(f"[!] Error leyendo Google Sheet: {e}")
         return
 
-    # 2. Convertir Encabezados de Fecha (Strings -> Datetime objects)
-    new_columns = {}
-    for col in df.columns:
-        # Intentar convertir si parece fecha (simple check)
-        try:
-             # Si el header tiene numeros y / o -
-             if isinstance(col, str) and any(c.isdigit() for c in col):
-                 # Intentar parsear
-                 dt = pd.to_datetime(col, dayfirst=True, errors='coerce')
-                 if pd.notna(dt):
-                     new_columns[col] = dt
-        except:
-             pass
+    # 3. Validar columnas esperadas (BOT MENSAJES structure)
+    expected_cols = ['Comprador', 'Email', 'Fecha_Vencimiento', 'Monto', 'Idioma', 'Ultimo_Aviso']
+    current_cols = df.columns.tolist()
     
-    if new_columns:
-        df = df.rename(columns=new_columns)
-        print(f"Encabezados de fecha detectados: {len(new_columns)}")
+    missing = [c for c in expected_cols if c not in current_cols]
+    if missing:
+        print(f"[!] Faltan columnas en 'BOT MENSAJES': {missing}")
+        return
 
-    # 3. Validar y Limpiar
-    
-    # Verificar columnas requeridas
-    # Mapeo similar al anterior
+    # Asignar nombres directos
     col_nombre = 'Comprador'
-    col_fecha = 'Fecha última cuota\nantes de la entrega' # Header original puede ser sucio
     col_email = 'Email'
+    col_fecha = 'Fecha_Vencimiento'
+    col_monto = 'Monto'
     col_idioma = 'Idioma'
-    
-    # Limpiar nombres de columnas (quitar saltos de linea)
-    clean_cols = {c: str(c).replace('\n', ' ') for c in df.columns}
-    df = df.rename(columns=clean_cols)
-    
-    # Re-definir nombres esperados tras limpieza
-    col_email = 'Email'
-    col_idioma = 'Idioma'
-    col_nombre = 'Comprador'
-    # Buscar columna que contenga "antes de la entrega" si no es exacta
-    col_fecha_clean = next((c for c in df.columns if 'antes de la entrega' in str(c)), None)
+    col_aviso = 'Ultimo_Aviso'
 
-    if not col_fecha_clean:
-         # Fallback a buscar 'Fecha' simplemente?
-         print("[!] No se encontró columna de fecha de entrega.")
-         print(f"Columnas: {df.columns.tolist()}")
-         return
-
-    # FILTRO: Eliminar filas donde Comprador o Villa estén vacíos 
-    if 'Villa' in df.columns:
-        df = df[df['Villa'] != '']
-    if col_nombre in df.columns:
-         df = df[df[col_nombre] != '']
-
+    # FILTRO: Eliminar filas vacías
+    df = df[df[col_nombre] != '']
     print(f"Filas tras limpieza: {len(df)}")
-    
-    # Normalizar columna de fecha de entrega (si la usamos para algo)
-    # Aunque la lógica principal itera sobre columnas que SON fechas (cuotas)
     
     fecha_hoy = pd.Timestamp.now().normalize()
     print(f"Fecha de hoy: {fecha_hoy.strftime('%d/%m/%Y')}")
 
     correos_enviados_count = 0
 
-    # Crear columnas faltantes en memoria si no existen (Email e Idioma deberían estar en Excel ahora)
-    if col_email not in df.columns:
-        df[col_email] = '' 
-    if col_idioma not in df.columns:
-        df[col_idioma] = 'Español' # Default
-    if 'Ultimo_Aviso' not in df.columns:
-        df['Ultimo_Aviso'] = ''
-
     count_processed = 0
     for index, row in df.iterrows():
-        # if count_processed >= 5:
-        #     print("--- DEBUG: Deteniendo tras 5 filas ---")
-        #     break
         count_processed += 1
 
         nombre = row[col_nombre]
-        email = row.get(col_email, '')
+        email = str(row.get(col_email, '')).strip()
         idioma_raw = str(row.get(col_idioma, 'Español')).lower()
         
         # Detectar idioma
@@ -446,59 +401,55 @@ def main():
         if 'ingl' in idioma_raw or 'english' in idioma_raw:
             lang_code = 'en'
         
-        # Si no hay email, loguear para el usuario
-        if (not email or pd.isna(email)) and not DRY_RUN:
-             # Si no es dry run, saltamos. Si es dry run, quizás simulemos si queremos probar fechas.
-             continue
+        # Si no hay email, loguear
+        if not email or pd.isna(email) or email == '':
+             if not DRY_RUN:
+                 print(f"  [!] Saltando {nombre} (No Email)")
+                 continue
+             else:
+                 email = "cliente_sin_email@demo.com" # Dummy for dry run testing logic
+
+        # Filtro de Estado: Asumimos 'Pendiente' si está en la lista de cobros
+        estado = 'Pendiente' 
+
+        # Parsear fecha
+        fecha_orig = row[col_fecha]
         
-        # Si en DRY RUN no hay email, usamos dummy para probar
-        if (not email or pd.isna(email)) and DRY_RUN:
-             email = "cliente_sin_email@demo.com"
-
-        # Filtro de Estado: El excel tiene 'Status', usaremos eso si existe
-        estado = 'Pendiente' # Default
-        if 'Status' in df.columns:
-             estado_val = str(row['Status'])
-             # Ajustar lógica según lo que haya en 'Status' del excel real
-             # Por ahora asumimos todo pendiente si no dice 'Pagado'
-             if 'Pagado' in estado_val: 
-                 estado = 'Pagado'
-
-        # Parsear fecha usando helper
-        fecha_orig = row[col_fecha_clean]
-        fecha_venc = parse_spanish_date(str(fecha_orig))
+        # Intentar parseo directo o con helper
+        try:
+             fecha_venc = pd.to_datetime(fecha_orig, dayfirst=True)
+        except:
+             fecha_venc = parse_spanish_date(str(fecha_orig))
         
         if pd.isna(fecha_venc):
             # print(f"  [i] Fecha inválida para {nombre}: {fecha_orig}")
             continue
         
-        # Buscar columna de Monto
-        col_monto = next((c for c in df.columns if str(c).lower() in ['monto', 'amount', 'importe', 'valor', 'cuota', 'precio']), None)
-        
+        # Monto
+        val_monto = str(row[col_monto]).strip()
+        # Limpieza básica de monto
+        val_monto = str(row[col_monto]).strip()
+        val_monto_clean = val_monto.replace('$', '').replace('US', '').strip()
         monto = 0.0
-        if col_monto:
-            val_monto = str(row[col_monto]).strip()
-            # Limpiar formato (asumiendo 1.500,00 o 1500.00 o $1,500.00)
-            # Eliminar simbolos de moneda
-            val_monto = val_monto.replace('$', '').replace('US', '').strip()
-            
-            # Intentar convertir
-            try:
-                # Si tiene punto y coma, determinar cual es decimal
-                # Caso español: 1.234,56 -> Quitar punto, cambiar coma por punto
-                if ',' in val_monto and '.' in val_monto:
-                    if val_monto.rfind(',') > val_monto.rfind('.'): # 1.234,56
-                         val_monto = val_monto.replace('.', '').replace(',', '.')
-                    else: # 1,234.56
-                         val_monto = val_monto.replace(',', '')
-                elif ',' in val_monto: # 124,56 o 1,234 (Ambiguo, pero asumimos decimal si es español)
-                     # Si es '1,234' podría ser mil. Si es '123,45' es decimal.
-                     # ASUMIMOS formato europeo para este proyecto (basado en templates)
-                     val_monto = val_monto.replace('.', '').replace(',', '.')
-                
-                monto = float(val_monto)
-            except:
-                monto = 0.0
+        
+        try:
+             # Si tiene punto y coma, determinar cual es decimal
+             if ',' in val_monto_clean and '.' in val_monto_clean:
+                 if val_monto_clean.rfind(',') > val_monto_clean.rfind('.'): # 1.234,56 (Euro/Latam)
+                      val_monto_clean = val_monto_clean.replace('.', '').replace(',', '.')
+                 else: # 1,234.56 (US)
+                      val_monto_clean = val_monto_clean.replace(',', '')
+             elif ',' in val_monto_clean: 
+                  # Caso ambiguo: 124,56 o 1,234
+                  # Si tiene decimales (2 chars al final), es decimal
+                  if len(val_monto_clean.split(',')[-1]) == 2:
+                      val_monto_clean = val_monto_clean.replace(',', '.')
+                  else:
+                      val_monto_clean = val_monto_clean.replace(',', '')
+             
+             monto = float(val_monto_clean)
+        except:
+             monto = 0.0
         
         ultimo_aviso = str(row['Ultimo_Aviso']) if pd.notna(row['Ultimo_Aviso']) else ""
 
