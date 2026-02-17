@@ -522,13 +522,12 @@ def main():
         # Checkbox desmarcado = FALSE = NO ENVIAR NADA
         enviar_val = str(row.get('Enviar_Correos', '')).lower().strip()
         should_send = enviar_val in ['si', 'x', 'yes', 'ok', 'verdadero', 'true']
+        print(f"DEBUG: {nombre} | Checkbox: '{enviar_val}' | ShouldSend: {should_send}")
         
         if not should_send:
             # Si el usuario desmarcó la casilla, NO hacemos nada.
             # Ni anticipos, ni reclamos. Silencio total.
-            if not DRY_RUN:
-                # Opcional: Loguear que se saltó por usuario
-                pass 
+            print(f"  [INFO] SALTANDO {nombre} porque la casilla está desmarcada (Valor: '{enviar_val}')")
             continue
 
         if dias_restantes == 7:
