@@ -1,5 +1,6 @@
 import pandas as pd
 import smtplib
+print("--- VERSION: FORCE UPDATE 2.0 (DEBUG ENABLED) ---")
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -43,7 +44,6 @@ ATTACHMENTS = {
     'en': 'BANKING INFORMATION BLH.pdf'
 }
 
-# --- PLANTILLAS DE CORREO (Español e Inglés) ---
 # --- PLANTILLAS DE CORREO (Español e Inglés) ---
 TEMPLATES = {
     'es': {
@@ -236,7 +236,6 @@ def enviar_correo(destinatarios_str, asunto, cuerpo, attachment_path=None):
             print("  [!] Advertencia: No se encontró logo.jpg")
 
         # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
-        # Adjuntar PDF (Metodos de Pago) al contenedor raíz MIXED
         if attachment_path and os.path.exists(attachment_path):
             try:
                 # ESTRATEGIA: Añadir página en blanco para forzar vista de icono en Apple Mail
@@ -398,7 +397,6 @@ def main():
         return
 
     # 3. Validar columnas esperadas (BOT MENSAJES structure)
-    # 3. Validar columnas esperadas (BOT MENSAJES structure)
     # Se añade 'Pagado' como opcional/esperada
     expected_cols = ['Comprador', 'Email', 'Fecha_Vencimiento', 'Monto', 'Idioma', 'Ultimo_Aviso']
     # column 'Pagado' is checked dynamically later
@@ -466,7 +464,6 @@ def main():
         # Monto
         val_monto = str(row[col_monto]).strip()
         # Limpieza básica de monto
-        val_monto = str(row[col_monto]).strip()
         val_monto_clean = val_monto.replace('$', '').replace('US', '').strip()
         monto = 0.0
         
