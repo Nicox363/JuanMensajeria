@@ -1,21 +1,18 @@
-import pandas as pd
-import smtplib
-print("--- VERSION: FORCE UPDATE 2.0 (DEBUG ENABLED) ---")
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
-from email.mime.application import MIMEApplication
-from datetime import datetime, timedelta
+# IMPORTS
 import os
-import sys
-import json
-import base64
-
-# Google Sheets Imports
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import pandas as pd
+from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from PyPDF2 import PdfReader, PdfWriter
+import base64
+import json
 import io
+from PyPDF2 import PdfReader, PdfWriter
 
 # --- CONFIGURACIÓN ---
 # GOOGLE SHEETS ID
@@ -519,12 +516,13 @@ def main():
         # Checkbox desmarcado = FALSE = NO ENVIAR NADA
         enviar_val = str(row.get('Enviar_Correos', '')).lower().strip()
         should_send = enviar_val in ['si', 'x', 'yes', 'ok', 'verdadero', 'true']
-        print(f"DEBUG: {nombre} | Checkbox: '{enviar_val}' | ShouldSend: {should_send}")
         
         if not should_send:
             # Si el usuario desmarcó la casilla, NO hacemos nada.
             # Ni anticipos, ni reclamos. Silencio total.
-            print(f"  [INFO] SALTANDO {nombre} porque la casilla está desmarcada (Valor: '{enviar_val}')")
+            if not DRY_RUN:
+                # Opcional: Loguear silenciosamente o nada
+                pass 
             continue
 
         if dias_restantes == 7:
